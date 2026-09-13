@@ -267,6 +267,112 @@ def welcome_listener_daemon():
             print(f"[-] Welcome listener loop notice: {e}")
             time.sleep(5)
 
+LEDGER_FILE = "whale_ledger.json"
+daily_trades = []
+
+def load_whale_ledger():
+    global daily_trades
+    if os.path.exists(LEDGER_FILE):
+        try:
+            with open(LEDGER_FILE, "r", encoding="utf-8") as f:
+                daily_trades = json.load(f)
+            cutoff = time.time() - 86400
+            daily_trades = [t for t in daily_trades if t.get("timestamp", 0) >= cutoff]
+            print(f"[+] Loaded {len(daily_trades)} trades from 24h whale ledger.")
+        except Exception as e:
+            print(f"[-] Ledger load notice: {e}")
+            daily_trades = []
+
+def record_whale_trade(pool, attrs, volume_usd):
+    trade_item = {
+        "timestamp": time.time(),
+        "symbol": pool["symbol"],
+        "name": pool["name"],
+        "volume_usd": volume_usd,
+        "kind": (attrs.get("kind") or "").upper(),
+        "tx_hash": attrs.get("tx_hash") or "",
+        "block_timestamp": attrs.get("block_timestamp") or ""
+    }
+    daily_trades.append(trade_item)
+    cutoff = time.time() - 86400
+    while daily_trades and daily_trades[0]["timestamp"] < cutoff:
+        daily_trades.pop(0)
+    try:
+        with open(LEDGER_FILE, "w", encoding="utf-8") as f:
+            json.dump(daily_trades, f)
+    except Exception:
+        pass
+
+def build_daily_recap_card():
+    if not daily_trades:
+        return None, None
+    cutoff = time.time() - 86400
+    valid_trades = [t for t in daily_trades if t.get("timestamp", 0) >= cutoff]
+    if not valid_trades:
+        return None, None
+        
+    total_vol = sum(t["volume_usd"] for t in valid_trades)
+    trade_count = len(valid_trades)
+    largest = max(valid_trades, key=lambda x: x["volume_usd"])
+    
+    pool_vols = collections.defaultdict(float)
+    for t in valid_trades:
+        pool_vols[t["symbol"]] += t["volume_usd"]
+        
+    top_symbol = max(pool_vols.items(), key=lambda x: x[1])[0]
+    
+    breakdown_lines = []
+    for sym, vol in sorted(pool_vols.items(), key=lambda x: x[1], reverse=True):
+        pct = (vol / total_vol) * 100 if total_vol > 0 else 0
+        breakdown_lines.append(f"• <b>${sym}:</b> ${vol:,.0f} ({pct:.1f}%)")
+    breakdown_text = "\n".join(breakdown_lines)
+    
+    now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%d %b %Y, %H:%M UTC")
+    
+    recap_html = (
+        f"👑 <b>SOLANA WHALE RADAR | 24H DAILY RECAP</b> 📊\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📅 <b>Snapshot:</b> {now_utc}\n\n"
+        f"💰 <b>Total Whale Inflow:</b> ${total_vol:,.2f} USD\n"
+        f"⚡ <b>Large Swaps Detected:</b> {trade_count} trades (>${MIN_WHALE_USD:,.0f})\n"
+        f"🏆 <b>Top Inflow Token:</b> ${top_symbol} (${pool_vols[top_symbol]:,.2f})\n\n"
+        f"👑 <b>Largest Single Swap:</b>\n"
+        f"• Asset: <b>${largest['symbol']} ({largest['name']})</b>\n"
+        f"• Volume: <b>${largest['volume_usd']:,.2f} USD</b>\n"
+        f"• Solscan Proof: <a href=\"https://solscan.io/tx/{largest['tx_hash']}\">Receipt 🧾</a>\n\n"
+        f"📈 <b>Volume Distribution:</b>\n"
+        f"{breakdown_text}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 <a href=\"https://t.me/solanawhaleradar/619\">Read Pinned Welcome Guide</a>\n"
+        f"🔔 <i>Turn notifications ON to catch moves in real time!</i>"
+    )
+    
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "📌 Welcome Guide", "url": "https://t.me/solanawhaleradar/619"}],
+            [{"text": "🛡️ Live RugCheck Audit", "url": "https://rugcheck.xyz"}]
+        ]
+    }
+    return recap_html, keyboard
+
+def daily_recap_scheduler():
+    """Dispatches a 24-hour consolidated whale recap every day at 00:00 UTC."""
+    last_recap_date = None
+    print("[*] Daily Whale Recap Scheduler active (target: 00:00 UTC).")
+    while True:
+        try:
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            current_date = now_utc.date()
+            if now_utc.hour == 0 and now_utc.minute >= 0 and last_recap_date != current_date:
+                card_html, keyboard = build_daily_recap_card()
+                if card_html:
+                    send_telegram_message(card_html, reply_markup=keyboard)
+                    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 👑 Dispatched Daily Whale Recap to Telegram!")
+                last_recap_date = current_date
+        except Exception as e:
+            print(f"[-] Daily recap scheduler notice: {e}")
+        time.sleep(30)
+
 def tracker_loop():
     print("================================================================")
     print("   SOLANA WHALE RADAR CLOUD DAEMON ACTIVE (24/7)")
@@ -283,13 +389,18 @@ def tracker_loop():
         try:
             initial_trades = fetch_real_pool_trades(pool["address"])
             for t in initial_trades:
-                tx = t.get("attributes", {}).get("tx_hash")
+                attrs = t.get("attributes", {})
+                tx = attrs.get("tx_hash")
+                vol = float(attrs.get("volume_in_usd") or 0.0)
+                k = (attrs.get("kind") or "").upper()
                 if tx:
                     mark_tx_seen(tx)
+                if vol >= MIN_WHALE_USD and k == "BUY":
+                    record_whale_trade(pool, attrs, vol)
         except Exception as e:
             print(f"[-] Warmup notice ({pool['symbol']}): {e}")
         time.sleep(1)
-    print(f"[+] Warm-up complete! Pre-cached {len(seen_cache)} existing transactions. Live monitoring active.\n")
+    print(f"[+] Warm-up complete! Pre-cached {len(seen_cache)} existing transactions ({len(daily_trades)} in 24h ledger). Live monitoring active.\n")
     
     while True:
         try:
@@ -320,6 +431,7 @@ def tracker_loop():
                     mark_tx_seen(tx_hash)
                         
                     if volume_usd >= MIN_WHALE_USD and kind == "BUY":
+                        record_whale_trade(pool, attrs, volume_usd)
                         alert_msg, keyboard = format_real_trade_alert(pool, attrs)
                         send_telegram_message(alert_msg, reply_markup=keyboard)
                         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🚨 BROADCAST: ${volume_usd:,.2f} on {pool['symbol']} | Tx: {tx_hash[:12]}...")
@@ -332,8 +444,11 @@ def tracker_loop():
             time.sleep(10)
 
 if __name__ == "__main__":
+    load_whale_ledger()
     t_health = threading.Thread(target=start_healthcheck_server, daemon=True)
     t_health.start()
     t_welcome = threading.Thread(target=welcome_listener_daemon, daemon=True)
     t_welcome.start()
+    t_recap = threading.Thread(target=daily_recap_scheduler, daemon=True)
+    t_recap.start()
     tracker_loop()
