@@ -64,12 +64,18 @@ def fetch_real_pool_trades(pool_address):
 def format_real_trade_alert(pool_info, trade_attrs):
     tx_hash = trade_attrs.get("tx_hash", "")
     wallet = trade_attrs.get("tx_from_address", "")
-    kind = (trade_attrs.get("kind") or "buy").upper()
     volume_usd = float(trade_attrs.get("volume_in_usd") or 0.0)
     price_usd = float(trade_attrs.get("price_to_in_usd") or trade_attrs.get("price_from_in_usd") or 0.0)
     block_timestamp = trade_attrs.get("block_timestamp", "")
     
-    if volume_usd >= 25000:
+    # Clean time format
+    time_display = block_timestamp
+    if "T" in block_timestamp:
+        time_display = block_timestamp.split("T")[1].replace("Z", "")[:8] + " UTC"
+    
+    if volume_usd >= 50000:
+        badge = "🚨 <b>TITAN WHALE BUY</b> 🐋🐋🐋"
+    elif volume_usd >= 25000:
         badge = "🚨 <b>MEGA WHALE BUY</b> 🐋🐋"
     elif volume_usd >= 10000:
         badge = "🟢 <b>BIG WHALE BUY</b> 🐋"
@@ -78,23 +84,34 @@ def format_real_trade_alert(pool_info, trade_attrs):
     
     token_addr = pool_info['token']
     pool_addr = pool_info['address']
+    symbol = pool_info['symbol'].upper()
+    name = pool_info['name']
+    
+    # Dynamic price formatting
+    if price_usd >= 1.0:
+        price_str = f"${price_usd:,.2f}"
+    elif price_usd >= 0.001:
+        price_str = f"${price_usd:.5f}"
+    else:
+        price_str = f"${price_usd:.8f}"
+        
+    wallet_short = f"{wallet[:6]}...{wallet[-6:]}" if len(wallet) > 12 else wallet
     
     msg = (
-        f"{badge}\n\n"
-        f"💰 <b>Swap Amount:</b> ${volume_usd:,.2f} USD\n"
-        f"🪙 <b>Token:</b> {pool_info['name']} (<b>${pool_info['symbol']}</b>)\n"
-        f"💵 <b>Execution Price:</b> ${price_usd:.6f}\n"
-        f"👤 <b>Whale Wallet:</b> <code>{wallet[:6]}...{wallet[-6:] if len(wallet) > 12 else wallet}</code>\n"
-        f"⏰ <b>On-Chain Time:</b> {block_timestamp}\n\n"
-        f"🔍 <b>Contract:</b> <code>{token_addr}</code>\n\n"
-        f"⚡ <b>1-Click Quick Actions:</b>\n"
-        f"• <a href=\"https://t.me/solana_trojanbot?start={token_addr}\"><b>[⚡ 1-Tap Buy on Trojan]</b></a>\n"
-        f"• <a href=\"https://photon-sol.tinyastro.io/en/lp/{token_addr}\"><b>[🚀 Fast Trade on Photon]</b></a>\n"
-        f"• <a href=\"https://rugcheck.xyz/tokens/{token_addr}\"><b>[🛡️ RugCheck Safety Score]</b></a>\n"
-        f"• <a href=\"https://dexscreener.com/solana/{pool_addr}\"><b>[📈 Live DexScreener Chart]</b></a>\n"
-        f"• <a href=\"https://solscan.io/tx/{tx_hash}\"><b>[🔗 Verified Solscan Receipt]</b></a>\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔥 <i>100% Real Solana On-Chain Alpha | Data only, not financial advice.</i>"
+        f"{badge}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"💎 <b>Token:</b> {name} (<b>${symbol}</b>)\n"
+        f"💰 <b>Trade Value:</b> <b>${volume_usd:,.2f} USD</b>\n"
+        f"🎯 <b>Execution Price:</b> <code>{price_str}</code>\n"
+        f"👤 <b>Whale Wallet:</b> <code>{wallet_short}</code>\n"
+        f"⏰ <b>Executed:</b> <code>{time_display}</code>\n\n"
+        f"📜 <b>Mint Address:</b> <i>(tap to copy)</i>\n"
+        f"<code>{token_addr}</code>\n\n"
+        f"⚡ <b>1-Click Analysis & Execution:</b>\n"
+        f"• <a href=\"https://rugcheck.xyz/tokens/{token_addr}\"><b>[🛡️ RugCheck Safety]</b></a> • <a href=\"https://dexscreener.com/solana/{pool_addr}\"><b>[📈 DexScreener Chart]</b></a>\n"
+        f"• <a href=\"https://solscan.io/tx/{tx_hash}\"><b>[🧾 Solscan Proof]</b></a> • <a href=\"https://t.me/solana_trojanbot?start={token_addr}\"><b>[⚡ Trojan 1-Tap]</b></a> • <a href=\"https://photon-sol.tinyastro.io/en/lp/{token_addr}\"><b>[🚀 Photon DEX]</b></a>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📡 <i>Solana Whale Radar • 100% Verified On-Chain Alpha</i>"
     )
     return msg
 
@@ -106,7 +123,7 @@ def send_telegram_message(html_text):
         "chat_id": CHANNEL_ID,
         "text": html_text,
         "parse_mode": "HTML",
-        "disable_web_page_preview": False
+        "disable_web_page_preview": True
     }).encode('utf-8')
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
     try:
