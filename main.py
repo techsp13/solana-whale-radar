@@ -165,11 +165,11 @@ def tracker_loop():
                         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🚨 BROADCAST: ${volume_usd:,.2f} on {pool['symbol']} | Tx: {tx_hash[:12]}...")
                         time.sleep(2)
                         
-                time.sleep(3)
-            time.sleep(20)
+                time.sleep(2)
+            time.sleep(10)
         except Exception as e:
             print(f"[-] Tracker loop error: {e}")
-            time.sleep(20)
+            time.sleep(10)
 
 if __name__ == "__main__":
     t = threading.Thread(target=start_healthcheck_server, daemon=True)
