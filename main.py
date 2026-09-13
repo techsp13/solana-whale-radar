@@ -76,18 +76,25 @@ def format_real_trade_alert(pool_info, trade_attrs):
     else:
         badge = "🟢 <b>WHALE BUY</b> 🐋"
     
+    token_addr = pool_info['token']
+    pool_addr = pool_info['address']
+    
     msg = (
         f"{badge}\n\n"
-        f"💰 <b>Amount:</b> ${volume_usd:,.2f} USD\n"
+        f"💰 <b>Swap Amount:</b> ${volume_usd:,.2f} USD\n"
         f"🪙 <b>Token:</b> {pool_info['name']} (<b>${pool_info['symbol']}</b>)\n"
         f"💵 <b>Execution Price:</b> ${price_usd:.6f}\n"
-        f"👤 <b>Wallet:</b> <code>{wallet[:6]}...{wallet[-6:] if len(wallet) > 12 else wallet}</code>\n"
+        f"👤 <b>Whale Wallet:</b> <code>{wallet[:6]}...{wallet[-6:] if len(wallet) > 12 else wallet}</code>\n"
         f"⏰ <b>On-Chain Time:</b> {block_timestamp}\n\n"
-        f"🔍 <b>Contract:</b> <code>{pool_info['token']}</code>\n"
-        f"📈 <b>Live Chart:</b> <a href=\"https://dexscreener.com/solana/{pool_info['address']}\">DexScreener</a>\n"
-        f"🔗 <b>Solscan Tx Proof:</b> <a href=\"https://solscan.io/tx/{tx_hash}\">Verify on Solscan</a>\n\n"
+        f"🔍 <b>Contract:</b> <code>{token_addr}</code>\n\n"
+        f"⚡ <b>1-Click Quick Actions:</b>\n"
+        f"• <a href=\"https://t.me/solana_trojanbot?start={token_addr}\"><b>[⚡ 1-Tap Buy on Trojan]</b></a>\n"
+        f"• <a href=\"https://photon-sol.tinyastro.io/en/lp/{token_addr}\"><b>[🚀 Fast Trade on Photon]</b></a>\n"
+        f"• <a href=\"https://rugcheck.xyz/tokens/{token_addr}\"><b>[🛡️ RugCheck Safety Score]</b></a>\n"
+        f"• <a href=\"https://dexscreener.com/solana/{pool_addr}\"><b>[📈 Live DexScreener Chart]</b></a>\n"
+        f"• <a href=\"https://solscan.io/tx/{tx_hash}\"><b>[🔗 Verified Solscan Receipt]</b></a>\n\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔥 <i>100% Verified Real On-Chain Swap | Data only, not financial advice.</i>"
+        f"🔥 <i>100% Real Solana On-Chain Alpha | Data only, not financial advice.</i>"
     )
     return msg
 
