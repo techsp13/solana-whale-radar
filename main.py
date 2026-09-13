@@ -11,6 +11,7 @@ import datetime
 import sys
 import os
 import threading
+import collections
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -19,7 +20,20 @@ CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID", "")
 MIN_WHALE_USD = float(os.environ.get("MIN_WHALE_USD", "5000.0"))
 PORT = int(os.environ.get("PORT", "8000"))
 
+# Dual-layer sliding window deduplication cache
 seen_cache = set()
+seen_queue = collections.deque()
+
+def mark_tx_seen(tx_hash):
+    """Adds tx_hash to cache with continuous FIFO sliding window (never wipes to zero)."""
+    if not tx_hash or tx_hash in seen_cache:
+        return False
+    seen_cache.add(tx_hash)
+    seen_queue.append(tx_hash)
+    if len(seen_queue) > 4000:
+        oldest = seen_queue.popleft()
+        seen_cache.discard(oldest)
+    return True
 
 MONITORED_POOLS = [
     {"symbol": "RAY", "name": "Raydium", "address": "2AXXcN6oN9bBT5owwmTH53C7QHUXvhLeu718Kqt8rvY2", "token": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"},
@@ -226,7 +240,7 @@ def tracker_loop():
             for t in initial_trades:
                 tx = t.get("attributes", {}).get("tx_hash")
                 if tx:
-                    seen_cache.add(tx)
+                    mark_tx_seen(tx)
         except Exception as e:
             print(f"[-] Warmup notice ({pool['symbol']}): {e}")
         time.sleep(1)
@@ -247,13 +261,23 @@ def tracker_loop():
                     tx_hash = attrs.get("tx_hash")
                     volume_usd = float(attrs.get("volume_in_usd") or 0.0)
                     kind = (attrs.get("kind") or "").upper()
+                    block_timestamp = attrs.get("block_timestamp", "")
                     
                     if not tx_hash or tx_hash in seen_cache:
                         continue
                         
-                    seen_cache.add(tx_hash)
-                    if len(seen_cache) > 5000:
-                        seen_cache.clear()
+                    # Strict Age Guard: ignore trades older than 6 minutes (prevents historical replay)
+                    if block_timestamp:
+                        try:
+                            trade_dt = datetime.datetime.fromisoformat(block_timestamp.replace("Z", "+00:00"))
+                            age_sec = (datetime.datetime.now(datetime.timezone.utc) - trade_dt).total_seconds()
+                            if age_sec > 360: # 6 minutes old
+                                mark_tx_seen(tx_hash)
+                                continue
+                        except Exception:
+                            pass
+                            
+                    mark_tx_seen(tx_hash)
                         
                     if volume_usd >= MIN_WHALE_USD and kind == "BUY":
                         alert_msg, keyboard = format_real_trade_alert(pool, attrs)
