@@ -16,7 +16,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 sys.stdout.reconfigure(encoding='utf-8')
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID", "")
-MIN_WHALE_USD = float(os.environ.get("MIN_WHALE_USD", "1000.0"))
+MIN_WHALE_USD = float(os.environ.get("MIN_WHALE_USD", "5000.0"))
 PORT = int(os.environ.get("PORT", "8000"))
 
 seen_cache = set()
@@ -37,6 +37,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         status = {
             "status": "healthy",
             "service": "solana-whale-radar",
+            "min_whale_usd": MIN_WHALE_USD,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "cached_tx": len(seen_cache)
         }
@@ -68,10 +69,15 @@ def format_real_trade_alert(pool_info, trade_attrs):
     price_usd = float(trade_attrs.get("price_to_in_usd") or trade_attrs.get("price_from_in_usd") or 0.0)
     block_timestamp = trade_attrs.get("block_timestamp", "")
     
-    emoji = "🟢 <b>WHALE BUY</b>" if kind == "BUY" else "🔴 <b>WHALE SELL</b>"
+    if volume_usd >= 25000:
+        badge = "🚨 <b>MEGA WHALE BUY</b> 🐋🐋"
+    elif volume_usd >= 10000:
+        badge = "🟢 <b>BIG WHALE BUY</b> 🐋"
+    else:
+        badge = "🟢 <b>WHALE BUY</b> 🐋"
     
     msg = (
-        f"{emoji} 🐋\n\n"
+        f"{badge}\n\n"
         f"💰 <b>Amount:</b> ${volume_usd:,.2f} USD\n"
         f"🪙 <b>Token:</b> {pool_info['name']} (<b>${pool_info['symbol']}</b>)\n"
         f"💵 <b>Execution Price:</b> ${price_usd:.6f}\n"
