@@ -218,6 +218,20 @@ def tracker_loop():
     print(f"  • Channel:         {CHANNEL_ID}")
     print("================================================================\n")
     
+    # Warm-up pass: pre-populate cache with current pool transactions so restarts never trigger a historical burst
+    print("[*] Performing startup cache warm-up (shielding from restart bursts)...")
+    for pool in MONITORED_POOLS:
+        try:
+            initial_trades = fetch_real_pool_trades(pool["address"])
+            for t in initial_trades:
+                tx = t.get("attributes", {}).get("tx_hash")
+                if tx:
+                    seen_cache.add(tx)
+        except Exception as e:
+            print(f"[-] Warmup notice ({pool['symbol']}): {e}")
+        time.sleep(1)
+    print(f"[+] Warm-up complete! Pre-cached {len(seen_cache)} existing transactions. Live monitoring active.\n")
+    
     last_guard_check = 0
     while True:
         try:
