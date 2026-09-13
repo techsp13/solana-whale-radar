@@ -19,6 +19,7 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHANNEL_ID = os.environ.get("TELEGRAM_CHANNEL_ID", "")
 MIN_WHALE_USD = float(os.environ.get("MIN_WHALE_USD", "5000.0"))
 PORT = int(os.environ.get("PORT", "8000"))
+WELCOME_AUTO_DELETE_SECONDS = int(os.environ.get("WELCOME_AUTO_DELETE_SECONDS", "90"))
 
 # Dual-layer sliding window deduplication cache
 seen_cache = set()
@@ -161,7 +162,7 @@ def format_real_trade_alert(pool_info, trade_attrs):
 
 def send_telegram_message(html_text, reply_markup=None):
     if not BOT_TOKEN or not CHANNEL_ID:
-        return False
+        return None
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload_dict = {
         "chat_id": CHANNEL_ID,
@@ -175,10 +176,96 @@ def send_telegram_message(html_text, reply_markup=None):
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return True
+            data = json.loads(resp.read().decode('utf-8'))
+            return data.get("result", {}).get("message_id")
     except Exception as e:
         print(f"[-] Telegram dispatch error: {e}")
-        return False
+        return None
+
+def delete_telegram_message(message_id, delay=0):
+    if not BOT_TOKEN or not CHANNEL_ID or not message_id:
+        return
+    if delay > 0:
+        time.sleep(delay)
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/deleteMessage"
+    payload = json.dumps({"chat_id": CHANNEL_ID, "message_id": message_id}).encode('utf-8')
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        pass
+
+def welcome_listener_daemon():
+    """Background listener for new members joining the public supergroup."""
+    if not BOT_TOKEN or not CHANNEL_ID:
+        return
+        
+    print("[*] Initializing Telegram Welcome Listener...")
+    offset = 0
+    try:
+        sync_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset=-1"
+        req = urllib.request.Request(sync_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8')).get("result", [])
+            if data:
+                offset = data[-1]["update_id"] + 1
+    except Exception as e:
+        print(f"[-] Welcome listener offset sync notice: {e}")
+        
+    print(f"[+] Welcome Listener active (offset: {offset}) - Monitoring new members.")
+    
+    while True:
+        try:
+            poll_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={offset}&timeout=20&allowed_updates=[\"message\"]"
+            req = urllib.request.Request(poll_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                updates = json.loads(resp.read().decode('utf-8')).get("result", [])
+                
+            for u in updates:
+                offset = max(offset, u["update_id"] + 1)
+                msg = u.get("message")
+                if not msg:
+                    continue
+                chat = msg.get("chat", {})
+                if str(chat.get("id")) != str(CHANNEL_ID):
+                    continue
+                    
+                new_members = msg.get("new_chat_members", [])
+                if new_members:
+                    # Clean up raw Telegram service message ("X joined the group")
+                    service_msg_id = msg.get("message_id")
+                    if service_msg_id:
+                        threading.Thread(target=delete_telegram_message, args=(service_msg_id, 1), daemon=True).start()
+                        
+                    for member in new_members:
+                        if member.get("is_bot"):
+                            continue
+                        name = member.get("first_name") or "Trader"
+                        welcome_card = (
+                            f"👋 <b>Welcome {name} to Solana Whale Radar!</b> 🐋\n\n"
+                            f"You're in a <b>100% Free 24/7 On-Chain Alpha Terminal</b> streaming verified Solana DEX swaps >$5,000 USD in real time.\n\n"
+                            f"⚡ <b>What you get here:</b>\n"
+                            f"• Real-time alerts on large Raydium/Orca swaps\n"
+                            f"• 🛡️ 1-Click RugCheck safety verification\n"
+                            f"• 🧾 Solscan cryptographic transaction receipts\n\n"
+                            f"📌 <i>Tap below to read our 1-minute welcome guide on spotting whale accumulation!</i>\n"
+                            f"🔔 <i>Turn notifications ON to catch moves early!</i>"
+                        )
+                        keyboard = {
+                            "inline_keyboard": [
+                                [{"text": "📌 Read Welcome Guide", "url": "https://t.me/solanawhaleradar/619"}]
+                            ]
+                        }
+                        sent_msg_id = send_telegram_message(welcome_card, reply_markup=keyboard)
+                        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🤝 WELCOMED: {name} (Msg ID: {sent_msg_id})")
+                        if sent_msg_id and WELCOME_AUTO_DELETE_SECONDS > 0:
+                            threading.Thread(target=delete_telegram_message, args=(sent_msg_id, WELCOME_AUTO_DELETE_SECONDS), daemon=True).start()
+                            
+        except (TimeoutError, urllib.error.URLError):
+            time.sleep(1)
+        except Exception as e:
+            print(f"[-] Welcome listener loop notice: {e}")
+            time.sleep(5)
 
 def tracker_loop():
     print("================================================================")
@@ -245,6 +332,8 @@ def tracker_loop():
             time.sleep(10)
 
 if __name__ == "__main__":
-    t = threading.Thread(target=start_healthcheck_server, daemon=True)
-    t.start()
+    t_health = threading.Thread(target=start_healthcheck_server, daemon=True)
+    t_health.start()
+    t_welcome = threading.Thread(target=welcome_listener_daemon, daemon=True)
+    t_welcome.start()
     tracker_loop()
