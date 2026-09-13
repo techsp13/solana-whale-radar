@@ -68,19 +68,35 @@ def format_real_trade_alert(pool_info, trade_attrs):
     price_usd = float(trade_attrs.get("price_to_in_usd") or trade_attrs.get("price_from_in_usd") or 0.0)
     block_timestamp = trade_attrs.get("block_timestamp", "")
     
+    # Calculate SOL amount if available
+    from_token_addr = trade_attrs.get("from_token_address", "")
+    to_token_addr = trade_attrs.get("to_token_address", "")
+    sol_mint = "So11111111111111111111111111111111111111112"
+    
+    sol_amount = 0.0
+    if from_token_addr == sol_mint:
+        sol_amount = float(trade_attrs.get("from_token_amount") or 0.0)
+    elif to_token_addr == sol_mint:
+        sol_amount = float(trade_attrs.get("to_token_amount") or 0.0)
+    
     # Clean time format
     time_display = block_timestamp
     if "T" in block_timestamp:
         time_display = block_timestamp.split("T")[1].replace("Z", "")[:8] + " UTC"
     
+    # Dynamic visual volume bars & badge
     if volume_usd >= 50000:
-        badge = "🚨 <b>TITAN WHALE BUY</b> 🐋🐋🐋"
+        bars = "🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢"
+        badge = "🚨 <b>TITAN WHALE BUY DETECTED!</b> 🐋🐋🐋"
     elif volume_usd >= 25000:
-        badge = "🚨 <b>MEGA WHALE BUY</b> 🐋🐋"
+        bars = "🟢🟢🟢🟢🟢🟢🟢"
+        badge = "🚨 <b>MEGA WHALE BUY DETECTED!</b> 🐋🐋"
     elif volume_usd >= 10000:
-        badge = "🟢 <b>BIG WHALE BUY</b> 🐋"
+        bars = "🟢🟢🟢🟢🟢"
+        badge = "🟢 <b>BIG WHALE BUY DETECTED!</b> 🐋"
     else:
-        badge = "🟢 <b>WHALE BUY</b> 🐋"
+        bars = "🟢🟢🟢"
+        badge = "🟢 <b>WHALE BUY DETECTED!</b> 🐋"
     
     token_addr = pool_info['token']
     pool_addr = pool_info['address']
@@ -96,35 +112,54 @@ def format_real_trade_alert(pool_info, trade_attrs):
         price_str = f"${price_usd:.8f}"
         
     wallet_short = f"{wallet[:6]}...{wallet[-6:]}" if len(wallet) > 12 else wallet
+    spent_str = f"<b>{sol_amount:,.1f} SOL</b> (${volume_usd:,.2f} USD)" if sol_amount > 0 else f"<b>${volume_usd:,.2f} USD</b>"
     
     msg = (
+        f"{bars}\n"
         f"{badge}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"💎 <b>Token:</b> {name} (<b>${symbol}</b>)\n"
-        f"💰 <b>Trade Value:</b> <b>${volume_usd:,.2f} USD</b>\n"
-        f"🎯 <b>Execution Price:</b> <code>{price_str}</code>\n"
-        f"👤 <b>Whale Wallet:</b> <code>{wallet_short}</code>\n"
-        f"⏰ <b>Executed:</b> <code>{time_display}</code>\n\n"
+        f"💰 <b>Spent:</b> {spent_str}\n"
+        f"🎯 <b>Price:</b> <code>{price_str}</code>\n"
+        f"👤 <b>Whale:</b> <code>{wallet_short}</code>\n"
+        f"⏰ <b>Time:</b> <code>{time_display}</code>\n\n"
         f"📜 <b>Mint Address:</b> <i>(tap to copy)</i>\n"
         f"<code>{token_addr}</code>\n\n"
-        f"⚡ <b>1-Click Analysis & Execution:</b>\n"
-        f"• <a href=\"https://rugcheck.xyz/tokens/{token_addr}\"><b>[🛡️ RugCheck Safety]</b></a> • <a href=\"https://dexscreener.com/solana/{pool_addr}\"><b>[📈 DexScreener Chart]</b></a>\n"
-        f"• <a href=\"https://solscan.io/tx/{tx_hash}\"><b>[🧾 Solscan Proof]</b></a> • <a href=\"https://t.me/solana_trojanbot?start={token_addr}\"><b>[⚡ Trojan 1-Tap]</b></a> • <a href=\"https://photon-sol.tinyastro.io/en/lp/{token_addr}\"><b>[🚀 Photon DEX]</b></a>\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📡 <i>Solana Whale Radar • 100% Verified On-Chain Alpha</i>"
+        f"📡 <i>Solana Whale Radar • Verified On-Chain Alpha</i>"
     )
-    return msg
+    
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "🛡️ RugCheck", "url": f"https://rugcheck.xyz/tokens/{token_addr}"},
+                {"text": "📈 DexScreener", "url": f"https://dexscreener.com/solana/{pool_addr}"}
+            ],
+            [
+                {"text": "⚡ Trojan Bot", "url": f"https://t.me/solana_trojanbot?start={token_addr}"},
+                {"text": "🚀 Photon DEX", "url": f"https://photon-sol.tinyastro.io/en/lp/{token_addr}"}
+            ],
+            [
+                {"text": "🧾 Solscan Proof", "url": f"https://solscan.io/tx/{tx_hash}"}
+            ]
+        ]
+    }
+    
+    return msg, keyboard
 
-def send_telegram_message(html_text):
+def send_telegram_message(html_text, reply_markup=None):
     if not BOT_TOKEN or not CHANNEL_ID:
         return False
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = json.dumps({
+    payload_dict = {
         "chat_id": CHANNEL_ID,
         "text": html_text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True
-    }).encode('utf-8')
+    }
+    if reply_markup:
+        payload_dict["reply_markup"] = reply_markup
+    payload = json.dumps(payload_dict).encode('utf-8')
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -160,8 +195,8 @@ def tracker_loop():
                         seen_cache.clear()
                         
                     if volume_usd >= MIN_WHALE_USD and kind == "BUY":
-                        alert_msg = format_real_trade_alert(pool, attrs)
-                        send_telegram_message(alert_msg)
+                        alert_msg, keyboard = format_real_trade_alert(pool, attrs)
+                        send_telegram_message(alert_msg, reply_markup=keyboard)
                         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🚨 BROADCAST: ${volume_usd:,.2f} on {pool['symbol']} | Tx: {tx_hash[:12]}...")
                         time.sleep(2)
                         

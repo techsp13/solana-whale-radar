@@ -4,3 +4,5 @@
 seen_transactions.json
 __pycache__/
 *.pyc
+x_session_profile/
+*.log
