@@ -1,0 +1,6 @@
+.env
+*.env
+*config*.json
+seen_transactions.json
+__pycache__/
+*.pyc

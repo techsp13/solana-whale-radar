@@ -1,0 +1,1 @@
+# Pure standard library - zero external dependencies required
