@@ -122,7 +122,8 @@ def format_real_trade_alert(pool_info, trade_attrs):
         f"💰 <b>Spent:</b> {spent_str}\n"
         f"🎯 <b>Price:</b> <code>{price_str}</code>\n"
         f"👤 <b>Whale:</b> <code>{wallet_short}</code>\n"
-        f"⏰ <b>Time:</b> <code>{time_display}</code>\n\n"
+        f"⏰ <b>Time:</b> <code>{time_display}</code>\n"
+        f"🧾 <b>Receipt:</b> <a href=\"https://solscan.io/tx/{tx_hash}\">Verified Solscan Proof ↗</a>\n\n"
         f"📜 <b>Mint Address:</b> <i>(tap to copy)</i>\n"
         f"<code>{token_addr}</code>\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -138,9 +139,6 @@ def format_real_trade_alert(pool_info, trade_attrs):
             [
                 {"text": "⚡ Trojan Bot", "url": f"https://t.me/solana_trojanbot?start={token_addr}"},
                 {"text": "🚀 Photon DEX", "url": f"https://photon-sol.tinyastro.io/en/lp/{token_addr}"}
-            ],
-            [
-                {"text": "🧾 Solscan Proof", "url": f"https://solscan.io/tx/{tx_hash}"}
             ]
         ]
     }
