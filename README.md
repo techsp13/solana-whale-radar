@@ -14,7 +14,7 @@ An autonomous, zero-latency on-chain monitoring daemon for the Solana ecosystem.
 Want to see the bot in action without running your own server?
 Join the 24/7 live alert channel:
 
-👉 **[Join Solana Whale Radar on Telegram](https://t.me/+l5JLBEsKPnRjYzZl)** *(100% Free for First 100 Founding Members)*
+👉 **[Join Solana Whale Radar on Telegram](https://t.me/+zXh-c1wnnoBkMTZl)** *(100% Free for First 100 Founding Members)*
 
 ---
 
