@@ -166,17 +166,66 @@ def send_telegram_message(html_text, reply_markup=None):
         print(f"[-] Telegram dispatch error: {e}")
         return False
 
+LOCK_MEMBER_THRESHOLD = int(os.environ.get("LOCK_MEMBER_THRESHOLD", "100"))
+approval_gate_active = False
+
+def check_member_guard():
+    global approval_gate_active
+    if approval_gate_active or not BOT_TOKEN or not CHANNEL_ID:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMemberCount?chat_id={CHANNEL_ID}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+            count = data.get("result", 0)
+            if count >= LOCK_MEMBER_THRESHOLD:
+                print(f"[!] 🚨 FOUNDING THRESHOLD REACHED ({count}/{LOCK_MEMBER_THRESHOLD})! ACTIVATING ADMIN PERMISSION GATE...")
+                # Create join request invite link requiring admin approval
+                gate_url = f"https://api.telegram.org/bot{BOT_TOKEN}/createChatInviteLink"
+                payload = json.dumps({
+                    "chat_id": CHANNEL_ID,
+                    "name": "VIP Approval Gate (Post-100)",
+                    "creates_join_request": True
+                }).encode('utf-8')
+                req2 = urllib.request.Request(gate_url, data=payload, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req2, timeout=8) as r2:
+                    res2 = json.loads(r2.read().decode())
+                    new_link = res2.get("result", {}).get("invite_link", "")
+                    print(f"[+] Active Admin Approval Link: {new_link}")
+                
+                # Broadcast and pin milestone lockdown notice
+                lock_text = (
+                    "🔒 <b>FIRST 100 FOUNDING SPOTS FILLED!</b>\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    "🎉 All 100 free founding passes have been officially claimed!\n\n"
+                    "⚠️ <b>Access Policy Update:</b>\n"
+                    "Free instant entry is now closed. Member #101 and all future participants require <b>Direct Admin Approval</b> to join.\n\n"
+                    "👑 <i>Existing 100 founding members have permanent lifetime access.</i>"
+                )
+                send_telegram_message(lock_text)
+                approval_gate_active = True
+    except Exception as e:
+        print(f"[-] Member guard check error: {e}")
+
 def tracker_loop():
     print("================================================================")
     print("   SOLANA WHALE RADAR CLOUD DAEMON ACTIVE (24/7)")
     print("================================================================")
     print(f"  • Monitored Pools: {len(MONITORED_POOLS)}")
     print(f"  • Min Whale Size:  ${MIN_WHALE_USD:,.0f} USD")
+    print(f"  • Member Cap Gate: {LOCK_MEMBER_THRESHOLD} Members")
     print(f"  • Channel:         {CHANNEL_ID}")
     print("================================================================\n")
     
+    last_guard_check = 0
     while True:
         try:
+            now = time.time()
+            if now - last_guard_check > 300: # Check member count every 5 minutes
+                last_guard_check = now
+                check_member_guard()
+                
             for pool in MONITORED_POOLS:
                 trades = fetch_real_pool_trades(pool["address"])
                 for t in trades:
