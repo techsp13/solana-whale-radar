@@ -253,7 +253,7 @@ def welcome_listener_daemon():
                         )
                         keyboard = {
                             "inline_keyboard": [
-                                [{"text": "📌 Read Welcome Guide", "url": "https://t.me/solanawhaleradar/619"}]
+                                [{"text": "📌 Read Welcome Guide", "url": "https://t.me/c/4417319591/619"}]
                             ]
                         }
                         sent_msg_id = send_telegram_message(welcome_card, reply_markup=keyboard)
@@ -343,13 +343,13 @@ def build_daily_recap_card():
         f"📈 <b>Volume Distribution:</b>\n"
         f"{breakdown_text}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📌 <a href=\"https://t.me/solanawhaleradar/619\">Read Pinned Welcome Guide</a>\n"
+        f"📌 <a href=\"https://t.me/c/4417319591/619\">Read Pinned Welcome Guide</a>\n"
         f"🔔 <i>Turn notifications ON to catch moves in real time!</i>"
     )
     
     keyboard = {
         "inline_keyboard": [
-            [{"text": "📌 Welcome Guide", "url": "https://t.me/solanawhaleradar/619"}],
+            [{"text": "📌 Welcome Guide", "url": "https://t.me/c/4417319591/619"}],
             [{"text": "🛡️ Live RugCheck Audit", "url": "https://rugcheck.xyz"}]
         ]
     }
