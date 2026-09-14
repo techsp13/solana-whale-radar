@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Network: Solana](https://img.shields.io/badge/Network-Solana%20Mainnet-14F195?logo=solana)](https://solana.com/)
-[![Telegram: Live Radar](https://img.shields.io/badge/Telegram-Live%20Whale%20Radar-2CA5E0?logo=telegram)](https://t.me/+8dLwdoXGoCY5M2Fl)
+[![Telegram: Live Radar](https://img.shields.io/badge/Telegram-Live%20Whale%20Radar-2CA5E0?logo=telegram)](https://t.me/solanawhaleradar)
 [![Status: 24/7 Active](https://img.shields.io/badge/Status-Live%20Streaming-brightgreen.svg)]()
 
 <p align="center">
@@ -19,7 +19,7 @@ An autonomous, zero-latency on-chain monitoring daemon for the Solana ecosystem.
 Want to see the bot in action without self-hosting?
 Join the 24/7 live alert terminal on Telegram:
 
-👉 **[Join Solana Whale Radar (100% Free Live Feed)](https://t.me/+8dLwdoXGoCY5M2Fl)**
+👉 **[Join Solana Whale Radar (100% Free Live Feed)](https://t.me/solanawhaleradar)**
 
 ---
 
