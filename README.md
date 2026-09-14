@@ -6,6 +6,10 @@
 [![Telegram: Live Radar](https://img.shields.io/badge/Telegram-Live%20Whale%20Radar-2CA5E0?logo=telegram)](https://t.me/+8dLwdoXGoCY5M2Fl)
 [![Status: 24/7 Active](https://img.shields.io/badge/Status-Live%20Streaming-brightgreen.svg)]()
 
+<p align="center">
+  <img src="assets/terminal_preview.jpg" alt="Solana Whale Radar Terminal Preview" width="100%">
+</p>
+
 An autonomous, zero-latency on-chain monitoring daemon for the Solana ecosystem. It tracks high-volume liquidity pool swaps across Raydium, Orca, and Meteora, filtering out noise and streaming real-time whale transactions ($5,000+ USD) with RugCheck audits and Solscan receipts.
 
 ---
