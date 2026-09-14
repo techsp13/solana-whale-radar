@@ -195,8 +195,60 @@ def delete_telegram_message(message_id, delay=0):
     except Exception:
         pass
 
+def audit_solana_token(mint):
+    """Fetches RugCheck report and GeckoTerminal stats to produce an interactive audit card."""
+    if not mint or len(mint) < 32 or len(mint) > 44:
+        return None
+    rc_data = {}
+    gt_data = {}
+    try:
+        rc_url = f"https://api.rugcheck.xyz/v1/tokens/{mint}/report/summary"
+        rc_req = urllib.request.Request(rc_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(rc_req, timeout=6) as resp:
+            rc_data = json.loads(resp.read().decode('utf-8'))
+    except Exception:
+        pass
+
+    try:
+        gt_url = f"https://api.geckoterminal.com/api/v2/networks/solana/tokens/{mint}"
+        gt_req = urllib.request.Request(gt_url, headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json;version=20230302'})
+        with urllib.request.urlopen(gt_req, timeout=6) as resp:
+            gt_data = json.loads(resp.read().decode('utf-8')).get('data', {}).get('attributes', {})
+    except Exception:
+        pass
+
+    if not rc_data and not gt_data:
+        return None
+
+    name = gt_data.get('name') or 'SPL Token'
+    symbol = gt_data.get('symbol') or 'TOKEN'
+    price = float(gt_data.get('price_usd') or 0.0)
+    vol = float(gt_data.get('volume_usd', {}).get('h24') or 0.0)
+    
+    score = rc_data.get('score', 0)
+    lp_locked = rc_data.get('lpLockedPct', 0.0)
+    risks = rc_data.get('risks', [])
+    
+    status = "🟢 SAFE (LOW RISK)" if score < 100 else ("🟡 MODERATE RISK" if score < 500 else "🔴 HIGH RISK / HONEYPOT")
+    price_str = f"${price:.6f}" if price < 0.01 else f"${price:,.2f}"
+    
+    audit_card = (
+        f"🛡️ <b>SOLANA TOKEN AUDIT REPORT</b> 🔍\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🪙 <b>Token:</b> {name} (<b>${symbol}</b>)\n"
+        f"💵 <b>Price:</b> {price_str} | <b>24h Vol:</b> ${vol:,.0f} USD\n\n"
+        f"🛡️ <b>RugCheck Score:</b> {score} / 1000\n"
+        f"• Verdict: <b>{status}</b>\n"
+        f"🔒 <b>Liquidity Locked:</b> {lp_locked:.1f}%\n"
+        f"⚠️ <b>Detected Risks:</b> {len(risks)} flags\n\n"
+        f"📈 <a href=\"https://dexscreener.com/solana/{mint}\">DexScreener Chart</a> | <a href=\"https://solscan.io/token/{mint}\">Solscan Explorer</a>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ <i>Drop any Solana contract address anytime to audit it!</i>"
+    )
+    return audit_card
+
 def welcome_listener_daemon():
-    """Background listener for new members joining the public supergroup."""
+    """Background listener for new members and interactive token audit commands."""
     if not BOT_TOKEN or not CHANNEL_ID:
         return
         
@@ -260,6 +312,23 @@ def welcome_listener_daemon():
                         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🤝 WELCOMED: {name} (Msg ID: {sent_msg_id})")
                         if sent_msg_id and WELCOME_AUTO_DELETE_SECONDS > 0:
                             threading.Thread(target=delete_telegram_message, args=(sent_msg_id, WELCOME_AUTO_DELETE_SECONDS), daemon=True).start()
+                            
+                # Interactive token audit command handler (/check <CA> or direct address paste)
+                msg_text = (msg.get("text") or "").strip()
+                if msg_text:
+                    mint_target = None
+                    if msg_text.startswith("/check") or msg_text.startswith("/audit") or msg_text.startswith("/rug"):
+                        parts = msg_text.split()
+                        if len(parts) > 1:
+                            mint_target = parts[1].strip()
+                    elif 32 <= len(msg_text) <= 44 and " " not in msg_text and not msg_text.startswith("/"):
+                        mint_target = msg_text
+                        
+                    if mint_target:
+                        audit_card = audit_solana_token(mint_target)
+                        if audit_card:
+                            send_telegram_message(audit_card)
+                            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🛡️ AUDIT DISPATCHED: {mint_target[:12]}...")
                             
         except (TimeoutError, urllib.error.URLError):
             time.sleep(1)
